@@ -41,6 +41,28 @@ header h1 {
 .status-running { background: rgba(53, 201, 140, 0.15); color: var(--ok); }
 .status-idle { background: rgba(139, 150, 171, 0.15); color: var(--muted); }
 .status-fault { background: rgba(239, 77, 77, 0.15); color: var(--err); }
+.status-stopped { background: rgba(139, 150, 171, 0.1); color: var(--muted); }
+
+.line-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 12px 32px 0;
+}
+
+.line-tab {
+  background: var(--panel);
+  color: var(--muted);
+  border: 1px solid #232d42;
+  border-radius: 8px 8px 0 0;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.line-tab.active {
+  color: var(--text);
+  border-bottom: 2px solid var(--accent);
+}
 
 main {
   padding: 24px 32px 60px;
@@ -80,21 +102,70 @@ main {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
-#restart-btn {
+.controls button {
   background: var(--accent);
   color: #06111f;
   border: none;
-  padding: 12px 20px;
+  padding: 12px 18px;
   border-radius: 8px;
   font-weight: 600;
   cursor: pointer;
 }
 
-#restart-btn:hover { opacity: 0.9; }
+.controls button:hover { opacity: 0.9; }
 
-#restart-feedback { color: var(--muted); font-size: 0.85rem; }
+#control-feedback { color: var(--muted); font-size: 0.85rem; }
+
+.setpoints {
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.setpoints h2 {
+  width: 100%;
+  margin: 0 0 4px;
+  font-size: 1rem;
+  color: var(--muted);
+}
+
+.setpoints label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.setpoints input {
+  background: #0f1420;
+  border: 1px solid #232d42;
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 6px;
+  width: 100px;
+}
+
+#apply-setpoint-btn {
+  background: var(--accent);
+  color: #06111f;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  align-self: flex-end;
+}
+
+#setpoint-feedback { color: var(--muted); font-size: 0.85rem; }
 
 .alarms { background: var(--panel); border-radius: 12px; padding: 16px; }
 .alarms h2 { margin-top: 0; font-size: 1rem; color: var(--muted); }

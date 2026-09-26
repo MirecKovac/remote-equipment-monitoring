@@ -3,90 +3,95 @@ main.py
 -------
 Remote Equipment Monitoring Dashboard
 ======================================
-Vzdialený monitoring a riadenie priemyselného zariadenia (simulované, ale
-architektonicky pripravené na reálny PLC/robot cez Modbus/OPC UA).
+Vzdialený monitoring a riadenie viacerých priemyselných liniek naraz.
 
 Spustenie:
     pip install -r requirements.txt
     uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-Potom otvor http://localhost:8000 v prehliadači.
 """
 
 import asyncio
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import List
+from typing import Dict, List, Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from . import database
 from .simulator import MachineStatus, Simulator
 
-simulator = Simulator()
 POLL_INTERVAL_SECONDS = 2
+
+# Dve simulované linky. Pridanie ďalšej = jeden riadok tu.
+lines: Dict[str, Simulator] = {
+    "line1": Simulator(name="Linka 1 — montáž"),
+    "line2": Simulator(name="Linka 2 — balenie"),
+}
+_last_status: Dict[str, MachineStatus] = {line_id: sim.status for line_id, sim in lines.items()}
 
 
 class ConnectionManager:
-    """Drží zoznam pripojených WebSocket klientov a rozposiela im dáta naraz."""
+    """Drží WebSocket klientov oddelene podľa linky, ktorú sledujú."""
 
     def __init__(self) -> None:
-        self.active_connections: List[WebSocket] = []
+        self.connections: Dict[str, List[WebSocket]] = {line_id: [] for line_id in lines}
 
-    async def connect(self, websocket: WebSocket) -> None:
+    async def connect(self, line_id: str, websocket: WebSocket) -> None:
         await websocket.accept()
-        self.active_connections.append(websocket)
+        self.connections[line_id].append(websocket)
 
-    def disconnect(self, websocket: WebSocket) -> None:
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
+    def disconnect(self, line_id: str, websocket: WebSocket) -> None:
+        if websocket in self.connections.get(line_id, []):
+            self.connections[line_id].remove(websocket)
 
-    async def broadcast(self, message: dict) -> None:
+    async def broadcast(self, line_id: str, message: dict) -> None:
         stale = []
-        for connection in self.active_connections:
+        for connection in self.connections.get(line_id, []):
             try:
                 await connection.send_text(json.dumps(message))
             except Exception:
                 stale.append(connection)
         for connection in stale:
-            self.disconnect(connection)
+            self.disconnect(line_id, connection)
 
 
 manager = ConnectionManager()
-_last_status = MachineStatus.RUNNING
 
 
 async def polling_loop() -> None:
-    """Bežiaci na pozadí: číta dáta zo (simulovaného) zariadenia každých pár
-    sekúnd, ukladá históriu, deteguje nové poruchy a posiela update všetkým
-    pripojeným dashboardom cez WebSocket."""
-    global _last_status
+    """Na pozadí číta dáta z každej linky, ukladá históriu, deteguje nové
+    poruchy a posiela update pripojeným dashboardom danej linky."""
     while True:
-        reading = simulator.read()
-        database.insert_reading(reading)
+        for line_id, sim in lines.items():
+            reading = sim.read()
+            database.insert_reading(line_id, reading)
 
-        if reading.status == MachineStatus.FAULT and _last_status != MachineStatus.FAULT:
-            message = (
-                f"Porucha zariadenia: tlak {reading.pressure_bar} bar, "
-                f"teplota {reading.temperature_c} °C"
+            if reading.status == MachineStatus.FAULT and _last_status[line_id] != MachineStatus.FAULT:
+                message = (
+                    f"Porucha zariadenia: tlak {reading.pressure_bar} bar, "
+                    f"teplota {reading.temperature_c} °C"
+                )
+                database.insert_alarm(line_id, reading.timestamp, message)
+
+            _last_status[line_id] = reading.status
+
+            await manager.broadcast(
+                line_id,
+                {
+                    "type": "reading",
+                    "timestamp": reading.timestamp,
+                    "temperature_c": reading.temperature_c,
+                    "pressure_bar": reading.pressure_bar,
+                    "cycle_count": reading.cycle_count,
+                    "status": reading.status.value,
+                    "setpoint_temp": reading.setpoint_temp,
+                    "setpoint_pressure": reading.setpoint_pressure,
+                },
             )
-            database.insert_alarm(reading.timestamp, message)
-
-        _last_status = reading.status
-
-        await manager.broadcast(
-            {
-                "type": "reading",
-                "timestamp": reading.timestamp,
-                "temperature_c": reading.temperature_c,
-                "pressure_bar": reading.pressure_bar,
-                "cycle_count": reading.cycle_count,
-                "status": reading.status.value,
-            }
-        )
         await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
 
@@ -104,48 +109,101 @@ STATIC_DIR = Path(__file__).parent.parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
+def _line_or_404(line_id: str) -> Simulator:
+    if line_id not in lines:
+        raise ValueError(f"Neznáma linka: {line_id}")
+    return lines[line_id]
+
+
 @app.get("/")
 async def index():
     return FileResponse(STATIC_DIR / "index.html")
 
 
+@app.get("/api/lines")
+async def get_lines():
+    return [{"id": line_id, "name": sim.name} for line_id, sim in lines.items()]
+
+
 @app.get("/api/status")
-async def get_status():
+async def get_status(line: str = "line1"):
+    sim = _line_or_404(line)
     return {
-        "temperature_c": simulator.temperature_c,
-        "pressure_bar": simulator.pressure_bar,
-        "cycle_count": simulator.cycle_count,
-        "status": simulator.status.value,
+        "temperature_c": sim.temperature_c,
+        "pressure_bar": sim.pressure_bar,
+        "cycle_count": sim.cycle_count,
+        "status": sim.status.value,
+        "setpoint_temp": sim.setpoint_temp,
+        "setpoint_pressure": sim.setpoint_pressure,
     }
 
 
 @app.get("/api/history")
-async def get_history(limit: int = 100):
-    return database.get_history(limit=limit)
+async def get_history(line: str = "line1", limit: int = 100):
+    _line_or_404(line)
+    return database.get_history(line_id=line, limit=limit)
 
 
 @app.get("/api/alarms")
-async def get_alarms(limit: int = 20):
-    return database.get_alarms(limit=limit)
+async def get_alarms(line: str = "line1", limit: int = 20):
+    _line_or_404(line)
+    return database.get_alarms(line_id=line, limit=limit)
+
+
+@app.get("/api/export")
+async def export_csv(line: str = "line1"):
+    _line_or_404(line)
+    csv_text = database.export_history_csv(line_id=line)
+    return PlainTextResponse(
+        csv_text,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{line}_history.csv"'},
+    )
 
 
 @app.post("/api/restart")
-async def restart_machine():
-    """Vzdialený zásah – reštart/kvitovanie poruchy bez fyzickej prítomnosti
-    pri zariadení. Presne toto je funkcia, ktorú náborári pri 'remote' rolách
-    chcú vidieť: schopnosť bezpečne zasiahnuť do procesu na diaľku."""
-    simulator.restart()
-    database.acknowledge_alarms()
-    await manager.broadcast({"type": "restart_ack"})
-    return {"ok": True, "status": simulator.status.value}
+async def restart_line(line: str = "line1"):
+    sim = _line_or_404(line)
+    sim.restart()
+    database.acknowledge_alarms(line_id=line)
+    await manager.broadcast(line, {"type": "restart_ack"})
+    return {"ok": True, "status": sim.status.value}
 
 
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
+@app.post("/api/start")
+async def start_line(line: str = "line1"):
+    sim = _line_or_404(line)
+    sim.start()
+    return {"ok": True, "status": sim.status.value}
+
+
+@app.post("/api/stop")
+async def stop_line(line: str = "line1"):
+    sim = _line_or_404(line)
+    sim.stop()
+    return {"ok": True, "status": sim.status.value}
+
+
+class SetpointPayload(BaseModel):
+    temperature: Optional[float] = None
+    pressure: Optional[float] = None
+
+
+@app.post("/api/setpoint")
+async def set_setpoint(payload: SetpointPayload, line: str = "line1"):
+    sim = _line_or_404(line)
+    sim.set_setpoints(payload.temperature, payload.pressure)
+    return {"ok": True, "setpoint_temp": sim.setpoint_temp, "setpoint_pressure": sim.setpoint_pressure}
+
+
+@app.websocket("/ws/{line_id}")
+async def websocket_endpoint(websocket: WebSocket, line_id: str):
+    if line_id not in lines:
+        await websocket.close(code=4004)
+        return
+    await manager.connect(line_id, websocket)
     try:
         while True:
-            # držíme spojenie otvorené; klient v tejto appke nič neposiela
             await websocket.receive_text()
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        manager.disconnect(line_id, websocket)

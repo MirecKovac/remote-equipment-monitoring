@@ -9,21 +9,23 @@
 </head>
 <body>
   <header>
-    <h1>🏭 Vzdialený monitoring výrobnej bunky</h1>
-    <div id="status-badge" class="badge status-running">RUNNING</div>
+    <h1>🏭 Vzdialený monitoring výrobných liniek</h1>
+    <div id="status-badge" class="badge status-stopped">STOPPED</div>
   </header>
+
+  <nav class="line-tabs" id="line-tabs"></nav>
 
   <main>
     <section class="metrics">
       <div class="card">
         <span class="card-label">Teplota</span>
         <span id="temp-value" class="card-value">--</span>
-        <span class="card-unit">°C</span>
+        <span class="card-unit">°C (cieľ: <span id="temp-setpoint">--</span>)</span>
       </div>
       <div class="card">
         <span class="card-label">Tlak</span>
         <span id="pressure-value" class="card-value">--</span>
-        <span class="card-unit">bar</span>
+        <span class="card-unit">bar (cieľ: <span id="pressure-setpoint">--</span>)</span>
       </div>
       <div class="card">
         <span class="card-label">Počet cyklov</span>
@@ -37,8 +39,25 @@
     </section>
 
     <section class="controls">
-      <button id="restart-btn">🔄 Vzdialený reštart / kvitovanie poruchy</button>
-      <span id="restart-feedback"></span>
+      <button id="start-btn">▶️ Štart linky</button>
+      <button id="stop-btn">⏹️ Stop linky</button>
+      <button id="restart-btn">🔄 Kvitovanie poruchy</button>
+      <button id="export-btn">⬇️ Export CSV</button>
+      <span id="control-feedback"></span>
+    </section>
+
+    <section class="setpoints">
+      <h2>Cieľové hodnoty</h2>
+      <label>
+        Teplota (°C)
+        <input type="number" id="setpoint-temp-input" step="0.5" />
+      </label>
+      <label>
+        Tlak (bar)
+        <input type="number" id="setpoint-pressure-input" step="0.1" />
+      </label>
+      <button id="apply-setpoint-btn">Nastaviť</button>
+      <span id="setpoint-feedback"></span>
     </section>
 
     <section class="alarms">
