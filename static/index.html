@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Remote Equipment Monitoring</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>🏭 Vzdialený monitoring výrobnej bunky</h1>
+    <div id="status-badge" class="badge status-running">RUNNING</div>
+  </header>
+
+  <main>
+    <section class="metrics">
+      <div class="card">
+        <span class="card-label">Teplota</span>
+        <span id="temp-value" class="card-value">--</span>
+        <span class="card-unit">°C</span>
+      </div>
+      <div class="card">
+        <span class="card-label">Tlak</span>
+        <span id="pressure-value" class="card-value">--</span>
+        <span class="card-unit">bar</span>
+      </div>
+      <div class="card">
+        <span class="card-label">Počet cyklov</span>
+        <span id="cycle-value" class="card-value">--</span>
+        <span class="card-unit"></span>
+      </div>
+    </section>
+
+    <section class="chart-section">
+      <canvas id="trend-chart" height="90"></canvas>
+    </section>
+
+    <section class="controls">
+      <button id="restart-btn">🔄 Vzdialený reštart / kvitovanie poruchy</button>
+      <span id="restart-feedback"></span>
+    </section>
+
+    <section class="alarms">
+      <h2>Log alarmov</h2>
+      <table id="alarms-table">
+        <thead>
+          <tr><th>Čas</th><th>Správa</th><th>Kvitované</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="/static/dashboard.js"></script>
+</body>
+</html>
