@@ -16,7 +16,7 @@ Webový dashboard na sledovanie a vzdialené riadenie výrobných liniek (simul�
 - export histórie do CSV
 
 ## Prečo som to robil
-Pracujem s priemyselnou automatizáciou (ABB roboty, RAPID, IPTE FrameWorX) a chcel som si vyskúšať, ako by vyzeral vzdialený monitoring reálnej linky, keby som k nej nemal fyzický prístup.
+Pracujem s priemyselnou automatizáciou (ABB roboty,IPTE FrameWorX) a chcel som si vyskúšať, ako by vyzeral vzdialený monitoring reálnej linky, keby som k nej nemal fyzický prístup.
 
 ## Architektúra
 - `app/simulator.py` — generuje dáta zariadenia (v produkcii by sa nahradilo Modbus/OPC UA klientom)
